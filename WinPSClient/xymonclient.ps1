@@ -3045,6 +3045,8 @@ function XymonSendViaHttp($msg)
         }
     }
 
+        $msg = $msg.Replace("`r","")
+
     # no Invoke-RestMethod before Powershell 3.0
     $request = [System.Net.HttpWebRequest]::Create($url)
     $request.Method = 'POST'
