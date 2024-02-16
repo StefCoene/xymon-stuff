@@ -3618,7 +3618,7 @@ function XymonCheckUpdate
         {
             WriteLog "Running version $Version; config version $($matches[1]); attempting upgrade"
 
-            # $matches[2] can be either a http[s] URL, bb fake URL or a file path
+            # $matches[2] can be either a http[s] URL, bb, xymon fake URL or a file path
             $updatePath = $matches[2]
             $updateFile = "xymonclient_$($matches[1]).ps1"
             $hashAlgorithm = $matches[3]
@@ -3637,7 +3637,7 @@ function XymonCheckUpdate
                 $destination = Join-Path -Path $xymondir -ChildPath $updateFile
                 $result = XymonDownloadFromURL $URL $destination
             }
-            elseif ($updatePath -match '^bb')
+            elseif ($updatePath -match '^bb' -or $updatePath -match '^xymon')
             {
                 $ServerPath = $updatePath.Trim()
                 $ServerPath = $ServerPath -creplace '^[^:]*:/*',''
@@ -3651,7 +3651,7 @@ function XymonCheckUpdate
             }
             else
             {
-                # not http, not bb - maybe a file path?
+                # not http, not bb, not xymon - maybe a file path?
                 $updateSource = Join-Path $updatePath $updateFile
                 $result = XymonDownloadFromFile $updateSource $destination
             }
@@ -3720,14 +3720,14 @@ function DownloadAndVerify([string] $URI, [string] $name, [string] $path, `
     {
         $result = XymonDownloadFromURL $URI $destination
     }
-    elseif ($URI -match '^bb')
+    elseif ($URI -match '^bb' -or $URI -match '^xymon')
     {
         $URI = $URI -creplace '^[^:]*:/*',''
         $result = XymonDownloadFromServer $URI $destination
     }
     else
     {
-        # not http, not bb - maybe a file path?
+        # not http, not bb, not xymon - maybe a file path?
         $result = XymonDownloadFromFile $URI $destination
     }
 
@@ -3800,7 +3800,7 @@ function XymonManageExternals
             ($priority, $executionFrequency, $executionMethod, $externalURI, `
              $hashAlgorithm, $hashRequired, $process, $arguments) = $matches[1..8]
 
-            if ($externalURI -match '^(http|bb)')
+            if ($externalURI -match '^(http|bb|xymon)')
             {
                 $externalScriptName = $externalURI.SubString($externalURI.LastIndexOf('/') + 1)
             }
