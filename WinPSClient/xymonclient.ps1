@@ -44,7 +44,13 @@ $Version = '2.42'
 $XymonClientVersion = "${Id}: xymonclient.ps1  $Version 2019-03-11 zak.beck@accenture.com"
 # detect if we're running as 64 or 32 bit
 $XymonRegKey = $(if([System.IntPtr]::Size -eq 8) { "HKLM:\SOFTWARE\Wow6432Node\XymonPSClient" } else { "HKLM:\SOFTWARE\XymonPSClient" })
-$XymonClientCfg = join-path $xymondir 'xymonclient_config.xml'
+
+if ( -not $env:XYMONCLIENTCFG ) {
+   $XymonClientCfg = join-path $xymondir 'xymonclient_config.xml'
+} else {
+   $XymonClientCfg = join-path $xymondir $env:XYMONCLIENTCFG
+}
+
 $ServiceChecks = @{}
 $MaintChecks = @{}
 
