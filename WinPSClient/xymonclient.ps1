@@ -3098,7 +3098,7 @@ function XymonSendViaHttp($msg)
 function XymonSend($msg, $servers, $filePath)
 {
     $saveresponse = 1   # Only on the first server
-    $outputbuffer = ""
+    $outputBuffer = ""
 
     if ($script:XymonSettings.serverUrl -ne '')
     {
@@ -3238,7 +3238,7 @@ function XymonSend($msg, $servers, $filePath)
             } # else of if ($srvIPs -eq $null) 
         } # foreach $srv in $servers
     }
-    $outputbuffer
+    $outputBuffer
 }
 
 function XymonClientConfig($cfglines)
