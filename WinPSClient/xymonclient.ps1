@@ -3422,7 +3422,7 @@ function XymonClientSections([boolean] $isSlowScan)
     XymonManageConfigs
     # maybe move XymonManageExternals to slow scan tasks
     XymonManageExternals
-    XymonExecuteExternals $isSlowScan
+    XymonExecuteExternals $isSlowScan $loopcount
 
     XymonClientVersion
     XymonUname
@@ -3932,7 +3932,7 @@ function XymonManageExternals
 
     foreach ($external in $externalConfig)
     {
-        if ($external -match '^external:(?:(\d+):)?(slowscan|everyscan):(sync|async):(.+?)(?:\|(MD5|SHA1|SHA256)\|([0-9a-f]+))?(?:\|(.+)\|(.+))?$')
+        if ($external -match '^external:(?:(\d+):)?(slowscan|everyscan|scan\|\d+):(sync|async):(.+?)(?:\|(MD5|SHA1|SHA256)\|([0-9a-f]+))?(?:\|(.+)\|(.+))?$')
         {
             # $matches[1] = priority (optional) 0-99
             # $matches[2] = slowscan/everyscan
@@ -4044,7 +4044,7 @@ function XymonManageExternals
     WriteLog 'XymonManageExternals finished'
 }
 
-function XymonExecuteExternals([boolean] $isSlowscan)
+function XymonExecuteExternals ([boolean] $isSlowscan, [int] $loopcount)
 {
     WriteLog 'Executing XymonExecuteExternals'
     $env:clientname = $script:clientname
@@ -4053,14 +4053,30 @@ function XymonExecuteExternals([boolean] $isSlowscan)
     {
         New-Item -ItemType directory -Path $script:XymonSettings.externaldatalocation
     }
+
     $script:externals | Sort-Object Priority, ExecutionMethod | foreach {
         WriteLog "External: $($_.ExecutionFrequency) - $($_.FullName)"
+
+        [bool] $execute = $true
+
         if (!$isSlowscan -and $_.ExecutionFrequency -eq 'slowscan')
         {
             WriteLog 'Skipping execution, this is not a slow scan'
+            $execute = $false
         }
-        else
-        {
+
+        if ($_.ExecutionFrequency -match '^scan\|(\d+)' ) {
+            $rest = $loopcount % $Matches[1]
+            if ( $loopcount % $Matches[1] -eq 0 )
+            {
+               WriteLog "Execution custom scan: $loopcount % $($Matches[1]) = $rest"
+            } else {
+               WriteLog "Skipping execution custom scan: $loopcount % $($Matches[1]) = $rest"
+               $execute = $false
+            }
+        }
+
+        if ( $execute -eq $true) {
             try
             {
                 $process = $_.ProcessName
@@ -4082,7 +4098,7 @@ function XymonExecuteExternals([boolean] $isSlowscan)
                         $process
                 }
                 WriteLog "Process $($extpid.Id) started"
-            
+
                 if ($_.ExecutionMethod -eq 'sync')
                 {
                     WriteLog "Synchronous external: waiting for process $($extpid.Id) to complete"
@@ -4100,6 +4116,7 @@ function XymonExecuteExternals([boolean] $isSlowscan)
             }
         }
     }
+
     WriteLog 'XymonExecuteExternals finished'
 }
 
