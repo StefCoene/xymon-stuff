@@ -1023,9 +1023,11 @@ function XymonInit
     SetIfNot $script:XymonSettings GetProcessInfoCommandLine 1 # get process command line 1 = yes, 0 = no
     SetIfNot $script:XymonSettings GetProcessInfoOwner 1 # get process owner 1 = yes, 0 = no
 
+    $configdir = Join-Path $xymondir 'etc'
     $extscript = Join-Path $xymondir 'ext'
     $extdata = Join-Path $xymondir 'tmp'
     $localdata = Join-Path $xymondir 'local'
+    SetIfNot $script:XymonSettings configlocation $configdir
     SetIfNot $script:XymonSettings externalscriptlocation $extscript
     SetIfNot $script:XymonSettings externaldatalocation $extdata
     SetIfNot $script:XymonSettings localdatalocation $localdata
@@ -3312,6 +3314,7 @@ function XymonClientConfig($cfglines)
                 -or $l -match '^enablediskpart' `
                 -or $l -match '^maxloop' `
                 -or $l -match '^slowscanrate' `
+                -or $l -match '^config' `
                 )
             {
                 WriteLog "Found a command: $l"
@@ -3416,6 +3419,7 @@ function XymonReportConfig
 
 function XymonClientSections([boolean] $isSlowScan)
 {
+    XymonManageConfigs
     # maybe move XymonManageExternals to slow scan tasks
     XymonManageExternals
     XymonExecuteExternals $isSlowScan
@@ -3828,6 +3832,95 @@ function DownloadAndVerify([string] $URI, [string] $name, [string] $path, `
         }
     }
     return $result
+}
+
+function XymonManageConfigs
+{
+    WriteLog "Executing XymonManageConfigs"
+    $Configs = @($script:clientlocalcfg_entries.keys | `
+        where { $_ -match '^config:' })
+
+    foreach ($config in $Configs)
+    {
+
+        if ($config -match '^config:(.+?)(?:\|(MD5|SHA1|SHA256)\|([0-9a-f]+))?$')
+        {
+            # $matches[1] = URL location
+            # $matches[2] = optional hash type
+            # $matches[3] = optional hash value
+
+            ($ConfigURI, $ConfighashAlgorithm, $ConfighashRequired) = $matches[1..3]
+
+            $ConfigName = $ConfigURI.SubString($ConfigURI.LastIndexOf('/') + 1)
+
+            if ( $ConfigName -eq '$ClientName.ini' ) {
+               $ConfigName = $script:clientname + ".ini"
+               $ConfigBaseURI = $ConfigURI.SubString(0,$ConfigURI.LastIndexOf('/') + 1)
+               $ConfigURI = $ConfigBaseURI + $ConfigName
+               WriteLog "Changing config file name to $ConfigName"
+            }
+
+            $FullName = Join-Path $script:XymonSettings.configlocation $ConfigName
+
+            $downloadFlag = $false
+
+            WriteLog "Checking $FullName"
+
+            # check to see if we have the matching version
+            if (Test-Path $FullName)
+            {
+                if ($ConfighashAlgorithm -ne $null -and $ConfighashRequired -ne $null)
+                {
+                    WriteLog "Config file found, $ConfigName - testing against hash"
+                    try
+                    {
+                        $fileHash = GetHashValueForFile -filename $FullName -hashAlgorithm $ConfighashAlgorithm
+                    }
+                    catch
+                    {
+                        WriteLog "Error calculating hash for file: $_"
+                    }
+                    if ($fileHash -ne $ConfighashRequired)
+                    {
+                        WriteLog "Existing script hash mismatch (calculated $fileHash should be $ConfighashRequired)"
+                        # hash mismatch, need to update via download 
+                        $downloadFlag = $true
+                    }
+                } else {
+                    WriteLog "Configuration file $ConfigName found, but no hash to check against so downloading again"
+                    $downloadFlag = $true
+                }
+            }
+            else
+            {
+                WriteLog "Configuration file $FullName not found"
+                $downloadFlag = $true
+            }
+
+            if ($downloadFlag)
+            {
+                WriteLog "Configuration file script $ConfigName not found or requires update, downloading"
+ 
+                try
+                {
+                    $result = DownloadAndVerify -URI $ConfigURI -name $ConfigName `
+                        -path $script:XymonSettings.configlocation `
+                        -hashAlgorithm $ConfighashAlgorithm -hashRequired $ConfighashRequired
+                    
+                }
+                catch
+                {
+                    WriteLog "Error downloading $ConfigName, ignoring"
+                    WriteLog "Error was: $_"
+                }
+            }
+        }
+        else
+        {
+            WriteLog "Configuration directive does not match expected format: $config"
+        }
+    } # foreach ... configs
+    WriteLog 'XymonManageConfigs finished'
 }
 
 function XymonManageExternals
