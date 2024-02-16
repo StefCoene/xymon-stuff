@@ -3491,17 +3491,28 @@ function ExecuteSelfUpdate([string]$newversion)
 
     WriteLog "Upgrading $oldversion to $newversion"
 
+    # test newversion
+    # copy oldversion as backup
     # copy newversion to correct name
     # remove newversion file
-    # re-start service - by exiting, NSSM will notice the process has ended and will
-    # automatically restart it
+    # re-start service - by exiting, NSSM will notice the process has ended and will automatically restart it
 
-    copy-item "$newversion" "$oldversion" -force
-    remove-item "$newversion"
+    $Process = powershell.exe -File $newversion ping | Out-String
 
-    WriteLog "Sending final log and restarting service..."
-    XymonLogSend
-    exit
+    if ( $Process -like "*xymond *" ) {
+        WriteLog "New version is working"
+
+        copy-item "$newversion" "$oldversion" -force
+        remove-item "$newversion"
+
+        WriteLog "Sending final log and restarting service..."
+        XymonLogSend
+        exit
+
+    } else {
+        WriteLog "ERROR! New version is not working"
+        WriteLog $Process
+    }
 }
 
 # XymonDownloadFromFile used when a file path is used instead of a URL
