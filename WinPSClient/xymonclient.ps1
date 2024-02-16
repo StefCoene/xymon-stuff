@@ -1005,7 +1005,6 @@ function XymonInit
     SetIfNot $script:XymonSettings loopinterval 300 # seconds to repeat client reporting loop
     SetIfNot $script:XymonSettings maxlogage 60 # minutes age for event log reporting
     SetIfNot $script:XymonSettings MaxEvents 5000 # maximum number of events per event log
-    SetIfNot $script:XymonSettings slowscanrate 72 # repeats of main loop before collecting slowly changing information again
     SetIfNot $script:XymonSettings reportevt 1 # scan eventlog and report (can be very slow)
     SetIfNot $script:XymonSettings EnableWin32_Product 0 # 0 = do not use Win32_product, 1 = do
                         # see http://support.microsoft.com/kb/974524 for reasons why Win32_Product is not recommended!
@@ -3272,6 +3271,7 @@ function XymonClientConfig($cfglines)
                 -or $l -match '^noservicecheck:' `
                 -or $l -match '^enablediskpart' `
                 -or $l -match '^maxloop' `
+                -or $l -match '^slowscanrate' `
                 )
             {
                 WriteLog "Found a command: $l"
@@ -3320,6 +3320,21 @@ function XymonClientConfig($cfglines)
         else
         {
             $script:maxloop = 0
+        }
+        # parse slowscanrate if it's there (add if not)
+        $slowscanrate = @($script:clientlocalcfg_entries.keys | `
+            where { $_ -match '^slowscanrate:([0-9]+)$' })
+        if ($slowscanrate.length -gt 1)
+        {
+            WriteLog 'ERROR: more than one slowscanrate directive in config!'
+        }
+        elseif ($slowscanrate.Length -eq 1)
+        {
+            $script:slowscanrate = [int]$matches[1]
+        }
+        else
+        {
+            $script:slowscanrate = 72
         }
     }
     WriteLog "Cached config now contains: "
@@ -4170,7 +4185,7 @@ if (Test-Path -PathType Leaf $script:XymonSettings.clientconfigfile)
 $lastcollectfile = join-path $script:XymonSettings.clientlogpath 'xymon-lastcollect.txt'
 $running = $true
 $script:collectionnumber = (0 -as [long])
-$loopcount = ($script:XymonSettings.slowscanrate - 1)
+$loopcount = ($script:slowscanrate - 1)
 
 AddHelperTypes
 
@@ -4186,7 +4201,7 @@ while ($running -eq $true) {
     $UTCstr = get-date -Date ((get-date).ToUniversalTime()) -uformat '%Y-%m-%d %H:%M:%S'
     WriteLog "UTC date/time: $UTCstr"
     WriteLog "This is collection number $($script:collectionnumber), loop count $loopcount"
-    WriteLog "Next 'slow scan' is when loopcount reaches $($script:XymonSettings.slowscanrate)"
+    WriteLog "Next 'slow scan' is when loopcount reaches $($script:slowscanrate)"
     if ($script:maxloop -gt 0)
     {
         WriteLog "XymonPSClient service will restart when loopcount greater than $($script:maxloop)"
@@ -4199,7 +4214,7 @@ while ($running -eq $true) {
     $starttime = Get-Date
     $slowscan = $false
     
-    if ($loopcount -eq $script:XymonSettings.slowscanrate) { 
+    if ($loopcount -eq $script:slowscanrate) { 
         $loopcount = 0
         $slowscan = $true
         
