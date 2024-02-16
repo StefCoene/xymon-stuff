@@ -3628,105 +3628,124 @@ function GetHashValueForFile([string] $filename, [string] $hashAlgorithm)
 function XymonCheckUpdate
 {
     WriteLog "Executing XymonCheckUpdate"
-    $updates = @($script:clientlocalcfg_entries.keys | `
-        where { $_ -match '^clientversion:(\d+\.\d+):(.+?)(?::(MD5|SHA1|SHA256):([0-9a-f]+))?$' })
-    if ($updates.length -gt 1)
-    {
-        WriteLog "ERROR: more than one clientversion directive in config!"
-    }
-    elseif ($updates.length -eq 1)
-    {
-        # $matches[1] = the new version number
-        # $matches[2] = the place to look for new version file
-        # $matches[3] = (optional) hash type
-        # $matches[4] = (optional) hash value
+    $updates = @($script:clientlocalcfg_entries.keys | where { $_ -match '^clientversion:' })
 
-        if ($Version -lt $matches[1])
+    if ($updates.length -gt 0)
+    {
+        if ($updates.length -eq 1)
         {
-            WriteLog "Running version $Version; config version $($matches[1]); attempting upgrade"
-
-            # $matches[2] can be either a http[s] URL, bb, xymon fake URL or a file path
-            $updatePath = $matches[2]
-            $updateFile = "xymonclient_$($matches[1]).ps1"
-            $hashAlgorithm = $matches[3]
-            $hashRequired = $matches[4]
-            $destination = Join-Path -Path $xymondir -ChildPath $updateFile
-
-            $result = $false
-            if ($updatePath -match '^http')
-            {
-                $updateURL = $updatePath.Trim()
-                if ($updateURL -notmatch '/$')
-                {
-                    $updateURL += '/'
-                }
-                $URL = "{0}{1}" -f $updateURL, $updateFile
-                $destination = Join-Path -Path $xymondir -ChildPath $updateFile
-                $result = XymonDownloadFromURL $URL $destination
-            }
-            elseif ($updatePath -match '^bb' -or $updatePath -match '^xymon')
-            {
-                $ServerPath = $updatePath.Trim()
-                $ServerPath = $ServerPath -creplace '^[^:]*:/*',''
-                if ($ServerPath -notmatch '/$')
-                {
-                    $ServerPath += '/'
-                }
-                $URL = "{0}{1}" -f $ServerPath, $updateFile
-                $destination = Join-Path -Path $xymondir -ChildPath $updateFile
-                $result = XymonDownloadFromServer $URL $destination
-            }
-            else
-            {
-                # not http, not bb, not xymon - maybe a file path?
-                $updateSource = Join-Path $updatePath $updateFile
-                $result = XymonDownloadFromFile $updateSource $destination
-            }
-
-            if ($result)
-            {
-                $newversion = Join-Path $xymondir $updateFile
-                if ($hashAlgorithm -ne $null)
-                {
-                    WriteLog "$($hashAlgorithm) hash specified, testing update file"
-                    $fileHash = ''
-                    try
-                    {
-                        $fileHash = GetHashValueForFile -filename $newversion -hashAlgorithm $hashAlgorithm
-                    }
-                    catch
-                    {
-                        WriteLog "Update directive specifies hash, but error calculating hash: $_"
-                        WriteLog "Update cancelled"
-                        Remove-Item $newversion
-                        return
-                    }
-
-                    if ($fileHash -ne $hashRequired)
-                    {
-                        WriteLog "Update: update file hash mismatch (calculated $fileHash should be $hashRequired)"
-                        WriteLog "Update cancelled"
-                        Remove-Item $newversion
-                        return
-                    }
-                    else
-                    {
-                        WriteLog "Update file hash matches expected value, update can proceed"
-                    }
-                }
-
-                WriteLog "Launching update"
-                ExecuteSelfUpdate $newversion
-            }
+            WriteLog "Found 1 $($updates.length) clientversion lines:"
         }
         else
         {
-            WriteLog "Update: Running version $Version; config version $($matches[1]); doing nothing"
+            WriteLog "Found $($updates.length) clientversion lines:"
+        }
+
+        $script:clientlocalcfg_entries.keys | where { $_ -match '^clientversion:(\d+\.\d+):(.+?)(?::(MD5|SHA1|SHA256):([0-9a-f]+))?$' } | foreach `
+        {
+            # $matches[1] = the new version number
+            # $matches[2] = the place to look for new version file
+            # $matches[3] = (optional) hash type
+            # $matches[4] = (optional) hash value
+
+            if ($Version -lt $matches[1])
+            {
+                WriteLog "Running version $Version; config version $($matches[1]); attempting upgrade from $($matches[2])"
+
+                # $matches[2] can be either a http[s] URL, bb fake URL or a file path
+                $updatePath = $matches[2]
+                $updateFile = "xymonclient_$($matches[1]).ps1"
+                $hashAlgorithm = $matches[3]
+                $hashRequired = $matches[4]
+                $destination = Join-Path -Path $xymondir -ChildPath $updateFile
+
+                $result = $false
+                if ($updatePath -match '^http')
+                {
+                    $updateURL = $updatePath.Trim()
+                    if ($updateURL -notmatch '/$')
+                    {
+                        $updateURL += '/'
+                    }
+                    $URL = "{0}{1}" -f $updateURL, $updateFile
+                    $destination = Join-Path -Path $xymondir -ChildPath $updateFile
+                    $result = XymonDownloadFromURL $URL $destination
+                }
+                elseif ($updatePath -match '^bb' -or $updatePath -match '^xymon')
+                {
+                    $ServerPath = $updatePath.Trim()
+                    $ServerPath = $ServerPath -creplace '^[^:]*:/*',''
+                    if ($ServerPath -notmatch '/$')
+                    {
+                        $ServerPath += '/'
+                    }
+                    $URL = "{0}{1}" -f $ServerPath, $updateFile
+                    $destination = Join-Path -Path $xymondir -ChildPath $updateFile
+                    $result = XymonDownloadFromServer $URL $destination
+                }
+                else
+                {
+                    # not http, not bb - maybe a file path?
+                    $updateSource = Join-Path $updatePath $updateFile
+                    $result = XymonDownloadFromFile $updateSource $destination
+                }
+
+                if ($result)
+                {
+                    $newversion = Join-Path $xymondir $updateFile
+
+                    $fileSize = (Get-Item $newversion).Length 
+
+                    # Failed http download results in 1 byte file
+                    if ( $fileSize -lt 2 )
+                    {
+                        WriteLog "Error: downloaded file is only $fileSize byte"
+                        exit
+                    }
+                    else
+                    {
+                        if ($hashAlgorithm -ne $null -and $hashAlgorithm -ne "")
+                        {
+                            WriteLog "$($hashAlgorithm) hash specified, testing update file"
+                            $fileHash = ''
+                            try
+                            {
+                                $fileHash = GetHashValueForFile -filename $newversion -hashAlgorithm $hashAlgorithm
+                            }
+                            catch
+                            {
+                                WriteLog "Update directive specifies hash, but error calculating hash: $_"
+                                WriteLog "Update cancelled"
+                                Remove-Item $newversion
+                                return
+                            }
+
+                            if ($fileHash -ne $hashRequired)
+                            {
+                                WriteLog "Update: update file hash mismatch (calculated $fileHash should be $hashRequired)"
+                                WriteLog "Update cancelled"
+                                Remove-Item $newversion
+                                return
+                            }
+                            else
+                            {
+                                WriteLog "Update file hash matches expected value, update can proceed"
+                            }
+                        }
+    
+                        WriteLog "Launching update"
+                        ExecuteSelfUpdate $newversion
+                    }
+                }
+            }
+            else
+            {
+                WriteLog "Update: Running version $Version; config version $($matches[1]) from $($matches[2]); doing nothing"
+            }
         }
     }
     else
     {
-        # no clientversion directive
         WriteLog "Update: No clientversion directive in config, nothing to do"
     }
 }
