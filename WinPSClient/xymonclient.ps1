@@ -3008,6 +3008,7 @@ function XymonSendViaHttp($msg)
         if ($url -notmatch '^https?://')
         {
             WriteLog "  ERROR: invalid server Url, check config: $url"
+            WriteLog 'XymonSendViaHttp finished'
             return ''
         }
 
@@ -3042,12 +3043,13 @@ function XymonSendViaHttp($msg)
             catch
             {
                 WriteLog "Error setting TLS options (old version of .NET?): $_"
+                WriteLog 'XymonSendViaHttp finished'
                 return $false
             }
         }
 
         $msg = $msg.Replace("`r","")
-    
+
         # no Invoke-RestMethod before Powershell 3.0
         $request = [System.Net.HttpWebRequest]::Create($url)
         $request.Method = 'POST'
@@ -3070,6 +3072,7 @@ function XymonSendViaHttp($msg)
         catch
         {
             WriteLog "  Exception connecting to $($url):`n$($_)"
+            WriteLog 'XymonSendViaHttp finished'
             return ''
         }
         
@@ -3077,6 +3080,7 @@ function XymonSendViaHttp($msg)
         if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK)
         {
             WriteLog "  FAILED, HTTP response code: $($response.StatusCode) ($statusCode)"
+            WriteLog 'XymonSendViaHttp finished'
             return ''
         }
 
@@ -3855,7 +3859,7 @@ function XymonManageExternals
 
             if ($downloadFlag)
             {
-                WriteLog "External script $externalScriptName not found or requires update, downloading"
+                WriteLog "External script $externalScriptName not found or requires update, downloading from $externalURI"
                 try
                 {
                     $result = DownloadAndVerify -URI $externalURI -name $externalScriptName `
@@ -4293,7 +4297,7 @@ while ($running -eq $true) {
     $loopcount++ 
     $UTCstr = get-date -Date ((get-date).ToUniversalTime()) -uformat '%Y-%m-%d %H:%M:%S'
     WriteLog "UTC date/time: $UTCstr"
-    WriteLog "This is collection number $($script:collectionnumber), loop count $loopcount"
+    WriteLog "This is collection number $($script:collectionnumber), loopcount $loopcount"
     WriteLog "Next 'slow scan' is when loopcount reaches $($script:slowscanrate)"
     if ($script:maxloop -gt 0)
     {
@@ -4306,13 +4310,13 @@ while ($running -eq $true) {
 
     $starttime = Get-Date
     $slowscan = $false
-    
+
     if ($loopcount -eq $script:slowscanrate) { 
+        WriteLog "Doing slow scan tasks: $loopcount -eq $($script:slowscanrate)"
+
         $loopcount = 0
         $slowscan = $true
         
-        WriteLog "Doing slow scan tasks"
-
         WriteLog "Executing XymonWMIQuickFixEngineering"
         $XymonWMIQuickFixEngineeringCache = XymonWMIQuickFixEngineering
         WriteLog "Executing XymonWMIProduct"
