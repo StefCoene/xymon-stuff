@@ -3885,6 +3885,8 @@ function XymonManageExternals
 function XymonExecuteExternals([boolean] $isSlowscan)
 {
     WriteLog 'Executing XymonExecuteExternals'
+    $env:clientname = $script:clientname
+
     if (!(Test-Path $script:XymonSettings.externaldatalocation))
     {
         New-Item -ItemType directory -Path $script:XymonSettings.externaldatalocation
