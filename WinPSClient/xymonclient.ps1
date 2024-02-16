@@ -2859,6 +2859,12 @@ function XymonProcessExternalData
                         WriteLog "Sending Xymon message for file $($f.Name) - test $($testName), host $($hostName)"
                         XymonSend $msg $script:XymonSettings.serversList
                     }
+                    elseif ($statusFileContent -match '^usermsg ')
+                    {
+                        $msg = $statusFileContent
+                        WriteLog "Sending Xymon usermsg"
+                        XymonSend $msg $script:XymonSettings.serversList
+                    }
                     else
                     {
                         WriteLog "External File: $($f.Name) - format not recognised"
