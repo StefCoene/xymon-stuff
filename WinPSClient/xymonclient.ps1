@@ -2999,7 +2999,7 @@ function DecryptHttpServerPassword
     return $serverPassword
 }
 
-function XymonSendViaHttp($msg)
+function XymonSendViaHttp($msg, $filePath)
 {
     WriteLog 'Executing XymonSendViaHttp'
 
@@ -3009,7 +3009,7 @@ function XymonSendViaHttp($msg)
         {
             WriteLog "  ERROR: invalid server Url, check config: $url"
             WriteLog 'XymonSendViaHttp finished'
-            return ''
+            return $false
         }
 
         WriteLog "  Using url $url"
@@ -3017,22 +3017,22 @@ function XymonSendViaHttp($msg)
         if ($script:XymonSettings.serverHttpUsername -ne '')
         {
             $serverHttpPassword = DecryptHttpServerPassword
-                if ( $serverHttpPassword -eq $null )
-                {
-                    WriteLog 'XymonSendViaHttp finished'
-                    return $false
-                }
-                else
-                {
-                    $authString = ('{0}:{1}' -f $script:XymonSettings.serverHttpUsername, `
-                        $serverHttpPassword)
-        
-                    $encodedAuth = [System.Convert]::ToBase64String(`
-                        [System.Text.Encoding]::GetEncoding('ISO-8859-1').GetBytes($authString))
-
-                    WriteLog "  Using username $($script:XymonSettings.serverHttpUsername)"
-                }
+            if ( $serverHttpPassword -eq $null )
+            {
+                WriteLog 'XymonSendViaHttp finished'
+                return $false
             }
+            else
+            {
+                $authString = ('{0}:{1}' -f $script:XymonSettings.serverHttpUsername, `
+                    $serverHttpPassword)
+        
+                $encodedAuth = [System.Convert]::ToBase64String(`
+                    [System.Text.Encoding]::GetEncoding('ISO-8859-1').GetBytes($authString))
+
+                WriteLog "  Using username $($script:XymonSettings.serverHttpUsername)"
+            }
+        }
 
         if ($url -match '^https://')
         {
@@ -3073,7 +3073,7 @@ function XymonSendViaHttp($msg)
         {
             WriteLog "  Exception connecting to $($url):`n$($_)"
             WriteLog 'XymonSendViaHttp finished'
-            return ''
+            return $false
         }
         
         $statusCode = [int]($response.StatusCode)
@@ -3081,7 +3081,7 @@ function XymonSendViaHttp($msg)
         {
             WriteLog "  FAILED, HTTP response code: $($response.StatusCode) ($statusCode)"
             WriteLog 'XymonSendViaHttp finished'
-            return ''
+            return $false
         }
 
         $responseStream = $response.GetResponseStream()
@@ -3089,8 +3089,8 @@ function XymonSendViaHttp($msg)
         $output = $readStream.ReadToEnd()
         WriteLog "  Received $($output.Length) bytes from server"
         $script:LastTransmissionMethod = 'HTTP'
-    }
 
+    }
     WriteLog 'XymonSendViaHttp finished'
     return $output
 }
@@ -3102,7 +3102,24 @@ function XymonSend($msg, $servers, $filePath)
 
     if ($script:XymonSettings.serverUrl -ne '')
     {
-        $outputBuffer = XymonSendViaHttp $msg
+        $outputBuffer = XymonSendViaHttp $msg $filePath
+
+        if ( $outputBuffer -ne $false)
+        {
+            $line = ($msg -split [environment]::newline)[0]
+            $line = $line -replace '[\t|\s]+', ' '
+            if  ($line -match '(download) (.*$)' ) 
+            {
+                if ($filePath -eq $null -or $filePath -eq "") 
+                {
+                    # save it locally with the same name
+                    $filePath = split-path -leaf $matches[2]
+                }
+
+                # Save in unix format so the hash is the same as on the (Linux) xymon server
+                Set-Content $filePath ([byte[]][char[]] "$outputBuffer") -Encoding Byte -NoNewLine
+            }
+        }
     }
     else
     {
@@ -3561,7 +3578,16 @@ function XymonDownloadFromURL([string]$downloadURL, [string]$destinationFilePath
                 return $false
             }
         }
-        $client.DownloadFile($downloadURL, $destinationFilePath)
+
+        try {
+            $client.DownloadFile($downloadURL, $destinationFilePath)
+        }
+        catch
+        {
+            $e = $_.Exception
+            WriteLog "Error during DownloadFile: $e.Message"
+            return $false
+        }
     }
     catch
     {
@@ -3579,7 +3605,8 @@ function XymonDownloadFromServer([string]$ServerPath, [string]$destinationFilePa
     try
     {
         # should work transparently through any intermediate proxies
-        XymonSend $message $script:XymonSettings.serversList $destinationFilePath
+        $output = XymonSend $message $script:XymonSettings.serversList $destinationFilePath
+        return $output
     }
     catch
     {
