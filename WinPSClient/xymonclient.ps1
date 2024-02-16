@@ -2993,7 +2993,7 @@ function DecryptHttpServerPassword
         catch
         {
             WriteLog "Failed to decrypt serverHttpPassword: $_"
-            $serverPassword = ''
+            $serverPassword = $null
         }
     }
     return $serverPassword
@@ -3015,15 +3015,22 @@ function XymonSendViaHttp($msg)
     if ($script:XymonSettings.serverHttpUsername -ne '')
     {
         $serverHttpPassword = DecryptHttpServerPassword
-        $authString = ('{0}:{1}' -f $script:XymonSettings.serverHttpUsername, `
-            $serverHttpPassword)
+            if ( $serverHttpPassword -eq $null )
+            {
+                WriteLog 'XymonSendViaHttp finished'
+                return $false
+            }
+            else
+            {
+                $authString = ('{0}:{1}' -f $script:XymonSettings.serverHttpUsername, `
+                    $serverHttpPassword)
         
-        $encodedAuth = [System.Convert]::ToBase64String(`
-            [System.Text.Encoding]::GetEncoding('ISO-8859-1').GetBytes($authString))
+                $encodedAuth = [System.Convert]::ToBase64String(`
+                    [System.Text.Encoding]::GetEncoding('ISO-8859-1').GetBytes($authString))
 
-
-        WriteLog "  Using username $($script:XymonSettings.serverHttpUsername)"
-    }
+                WriteLog "  Using username $($script:XymonSettings.serverHttpUsername)"
+            }
+        }
 
     if ($url -match '^https://')
     {
