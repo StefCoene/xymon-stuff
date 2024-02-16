@@ -3777,7 +3777,7 @@ function DownloadAndVerify([string] $URI, [string] $name, [string] $path, `
     }
     else
     {
-        # not http, not bb, not xymon - maybe a file path?
+        # not http, not bb - maybe a file path?
         $result = XymonDownloadFromFile $URI $destination
     }
 
