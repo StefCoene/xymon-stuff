@@ -3003,86 +3003,88 @@ function XymonSendViaHttp($msg)
 {
     WriteLog 'Executing XymonSendViaHttp'
 
-    $url = $script:XymonSettings.serverUrl
-    if ($url -notmatch '^https?://')
-    {
-        WriteLog "  ERROR: invalid server Url, check config: $url"
-        return ''
-    }
+    $script:XymonSettings.serverUrl.Split(" ") | ForEach {
+        $url = $_
+        if ($url -notmatch '^https?://')
+        {
+            WriteLog "  ERROR: invalid server Url, check config: $url"
+            return ''
+        }
 
-    WriteLog "  Using url $url"
-    $encodedAuth = ''
-    if ($script:XymonSettings.serverHttpUsername -ne '')
-    {
-        $serverHttpPassword = DecryptHttpServerPassword
-            if ( $serverHttpPassword -eq $null )
-            {
-                WriteLog 'XymonSendViaHttp finished'
-                return $false
-            }
-            else
-            {
-                $authString = ('{0}:{1}' -f $script:XymonSettings.serverHttpUsername, `
-                    $serverHttpPassword)
+        WriteLog "  Using url $url"
+        $encodedAuth = ''
+        if ($script:XymonSettings.serverHttpUsername -ne '')
+        {
+            $serverHttpPassword = DecryptHttpServerPassword
+                if ( $serverHttpPassword -eq $null )
+                {
+                    WriteLog 'XymonSendViaHttp finished'
+                    return $false
+                }
+                else
+                {
+                    $authString = ('{0}:{1}' -f $script:XymonSettings.serverHttpUsername, `
+                        $serverHttpPassword)
         
-                $encodedAuth = [System.Convert]::ToBase64String(`
-                    [System.Text.Encoding]::GetEncoding('ISO-8859-1').GetBytes($authString))
+                    $encodedAuth = [System.Convert]::ToBase64String(`
+                        [System.Text.Encoding]::GetEncoding('ISO-8859-1').GetBytes($authString))
 
-                WriteLog "  Using username $($script:XymonSettings.serverHttpUsername)"
+                    WriteLog "  Using username $($script:XymonSettings.serverHttpUsername)"
+                }
+            }
+
+        if ($url -match '^https://')
+        {
+            try
+            {
+                [Net.ServicePointManager]::SecurityProtocol = "tls12, tls11, tls"
+            }
+            catch
+            {
+                WriteLog "Error setting TLS options (old version of .NET?): $_"
+                return $false
             }
         }
 
-    if ($url -match '^https://')
-    {
+        $msg = $msg.Replace("`r","")
+    
+        # no Invoke-RestMethod before Powershell 3.0
+        $request = [System.Net.HttpWebRequest]::Create($url)
+        $request.Method = 'POST'
+        $request.Timeout = $script:XymonSettings.serverHttpTimeoutMs
+        if ($encodedAuth -ne '')
+        {
+            $request.Headers.Add('Authorization', "Basic $encodedAuth")
+        }
+
+        $body = [byte[]][char[]]$msg
+        $bodyStream = $request.GetRequestStream()
+        $bodyStream.Write($body, 0, $body.Length)
+
+        WriteLog "  Connecting to $($url), body length $($body.Length), timeout $($script:XymonSettings.serverHttpTimeoutMs)ms"
         try
         {
-            [Net.ServicePointManager]::SecurityProtocol = "tls12, tls11, tls"
+            $response = $request.GetResponse()
         }
         catch
         {
-            WriteLog "Error setting TLS options (old version of .NET?): $_"
-            return $false
+            WriteLog "  Exception connecting to $($url):`n$($_)"
+            return ''
         }
-    }
-
-        $msg = $msg.Replace("`r","")
-
-    # no Invoke-RestMethod before Powershell 3.0
-    $request = [System.Net.HttpWebRequest]::Create($url)
-    $request.Method = 'POST'
-    $request.Timeout = $script:XymonSettings.serverHttpTimeoutMs
-    if ($encodedAuth -ne '')
-    {
-        $request.Headers.Add('Authorization', "Basic $encodedAuth")
-    }
-
-    $body = [byte[]][char[]]$msg
-    $bodyStream = $request.GetRequestStream()
-    $bodyStream.Write($body, 0, $body.Length)
-
-    WriteLog "  Connecting to $($url), body length $($body.Length), timeout $($script:XymonSettings.serverHttpTimeoutMs)ms"
-    try
-    {
-        $response = $request.GetResponse()
-    }
-    catch
-    {
-        WriteLog "  Exception connecting to $($url):`n$($_)"
-        return ''
-    }
         
-    $statusCode = [int]($response.StatusCode)
-    if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK)
-    {
-        WriteLog "  FAILED, HTTP response code: $($response.StatusCode) ($statusCode)"
-        return ''
-    }
+        $statusCode = [int]($response.StatusCode)
+        if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK)
+        {
+            WriteLog "  FAILED, HTTP response code: $($response.StatusCode) ($statusCode)"
+            return ''
+        }
 
-    $responseStream = $response.GetResponseStream()
-    $readStream = New-Object System.IO.StreamReader $responseStream
-    $output = $readStream.ReadToEnd()
-    WriteLog "  Received $($output.Length) bytes from server"
-    $script:LastTransmissionMethod = 'HTTP'
+        $responseStream = $response.GetResponseStream()
+        $readStream = New-Object System.IO.StreamReader $responseStream
+        $output = $readStream.ReadToEnd()
+        WriteLog "  Received $($output.Length) bytes from server"
+        $script:LastTransmissionMethod = 'HTTP'
+    }
 
     WriteLog 'XymonSendViaHttp finished'
     return $output
