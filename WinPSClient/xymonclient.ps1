@@ -3792,14 +3792,21 @@ function DownloadAndVerify([string] $URI, [string] $name, [string] $path, `
     }
     if ($result)
     {
-        $originalFile = Join-Path -Path $path -ChildPath $name
-        if (Test-Path $originalFile)
+        if (Test-Path $destination)
         {
-            WriteLog "Deleting original file $originalFile"
-            Remove-Item -Force $originalFile
+            $originalFile = Join-Path -Path $path -ChildPath $name
+            if (Test-Path $originalFile)
+            {
+                WriteLog "Deleting original file $originalFile"
+                Remove-Item -Force $originalFile
+            }
+            WriteLog "Renaming $destination to $originalFile"
+            Move-Item -Force $destination $originalFile
         }
-        WriteLog "Renaming $destination to $originalFile"
-        Move-Item -Force $destination $originalFile
+        else
+        {
+            WriteLog "Error: new file $destination not found"
+        }
     }
     return $result
 }
