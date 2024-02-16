@@ -2856,7 +2856,7 @@ function XymonProcessExternalData
                         }
                         $msg += (' {0}.{1} {2} {3}' -f $hostName, $testName, $groupColour, $statusMessage)
                         
-                        WriteLog "Sending Xymon message for file $($f.Name) - test $($testName), host $($hostName): $msg"
+                        WriteLog "Sending Xymon message for file $($f.Name) - test $($testName), host $($hostName)"
                         XymonSend $msg $script:XymonSettings.serversList
                     }
                     else
