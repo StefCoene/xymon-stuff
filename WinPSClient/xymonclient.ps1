@@ -4164,6 +4164,11 @@ if($args -eq "Stop") {
     if((get-service $xymonsvcname).Status -eq "Running") { stop-service $xymonsvcname }
     return
 }
+if($args -eq "ping") {
+    $output = XymonSend "ping" $script:XymonSettings.serversList
+    $output
+    return
+}
 if($ret) {return}
 if($args -ne $null) {
     "Usage: "+ $MyInvocation.MyCommand.Definition +" install | uninstall | start | stop | config "
