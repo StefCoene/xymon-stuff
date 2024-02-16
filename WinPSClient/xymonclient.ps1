@@ -3057,7 +3057,8 @@ function XymonSendViaHttp($msg)
             $request.Headers.Add('Authorization', "Basic $encodedAuth")
         }
 
-        $body = [byte[]][char[]]$msg
+        #$body = [byte[]][char[]]$msg
+        $body = [text.encoding]::ascii.getbytes($msg)
         $bodyStream = $request.GetRequestStream()
         $bodyStream.Write($body, 0, $body.Length)
 
