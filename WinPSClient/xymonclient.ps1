@@ -3273,6 +3273,7 @@ function XymonClientConfig($cfglines)
                 -or $l -match '^proc(?:ess)?runtime:' `
                 -or $l -match '^external:' `
                 -or $l -match '^xymonlogsend' `
+                -or $l -match '^xymonlogarchive' `
                 -or $l -match '^slimmode' `
                 -or $l -match '^noservicecheck:' `
                 -or $l -match '^enablediskpart' `
@@ -4073,6 +4074,68 @@ function RepeatTests([string] $content)
 
 function XymonLogSend()
 {
+    if (@($script:clientlocalcfg_entries.Keys -like 'xymonlogarchive*').Length -gt 1)
+    {
+        WriteLog "XymonLogArchive: disabling, more than one xymonlogarchive directive in config"
+    }
+    elseif (@($script:clientlocalcfg_entries.Keys -like 'xymonlogarchive*').Length -eq 0)
+    {
+        WriteLog 'XymonLogArchive: disabling, no entry found in config file'
+    }
+    else
+    {
+        # Keeping older logs in directory $OldSubDirectory for $RententionInDays days
+        # Default values:
+   
+        $script:clientlocalcfg_entries.Keys | where { $_ -match '^xymonlogarchive:(.*):(.*)$' } | foreach {
+            $OldSubDirectory  = $Matches[1]
+            $RententionInDays = $Matches[2]
+        }
+
+        if ( $OldSubDirectory -ne $null -and $RententionInDays -ne $null ) {
+            WriteLog "XymonLogArchive: rotate logs: $RententionInDays days @ directory $OldSubDirectory"
+
+            # Format of the old logfile
+            $DateTimeFormat   = "yyyy-MM-dd_HHmmss"
+
+            $S = Get-Item -LiteralPath $script:XymonSettings.clientlogfile
+
+            # Make sure the directory for the old log files exists
+            $DestinationPath = Join-Path -Path $S.DirectoryName -ChildPath $OldSubDirectory
+            If (! (Test-Path -LiteralPath $DestinationPath) ) {
+               $Null = New-Item -Path $DestinationPath -Type Directory -Force
+            }
+
+            # Copy logfile
+            $Destination = Join-Path -Path $DestinationPath -ChildPath ('{0}_{1}{2}' -F $S.BaseName, ((Get-Date).ToString($DateTimeFormat)), $S.Extension)
+            Copy-Item -Path $script:XymonSettings.clientlogfile -Destination $Destination -Force
+
+            # Cleanup old files
+            Get-ChildItem -LiteralPath $DestinationPath -File -Filter ($Format -F $S.BaseName, '*',$S.Extension) | ? LastWriteTime -le ((Get-Date).AddDays(-$RententionInDays)) | Remove-Item -ErrorAction SilentlyContinue
+
+
+
+            $S = Get-Item -LiteralPath $script:lastcollectfile
+
+            # Make sure the directory for the old log files exists
+            $DestinationPath = Join-Path -Path $S.DirectoryName -ChildPath $OldSubDirectory
+            If (! (Test-Path -LiteralPath $DestinationPath) ) {
+               $Null = New-Item -Path $DestinationPath -Type Directory -Force
+            }
+
+            # Copy logfile
+            $Destination = Join-Path -Path $DestinationPath -ChildPath ('{0}_{1}{2}' -F $S.BaseName, ((Get-Date).ToString($DateTimeFormat)), $S.Extension)
+            Copy-Item -Path $script:lastcollectfile -Destination $Destination -Force
+
+            # Cleanup old files
+            Get-ChildItem -LiteralPath $DestinationPath -File -Filter ($Format -F $S.BaseName, '*',$S.Extension) | ? LastWriteTime -le ((Get-Date).AddDays(-$RententionInDays)) | Remove-Item -ErrorAction SilentlyContinue
+
+        } else {
+            WriteLog "XymonLogArchive: rotate logs: error in format of setting!"
+        }
+    }
+
+
     # special handling for xymonlog
     $markslowscan = 'green'
     if (@($script:clientlocalcfg_entries.Keys -like 'xymonlogsend*').Length -gt 1)
@@ -4193,7 +4256,7 @@ if (Test-Path -PathType Leaf $script:XymonSettings.clientconfigfile)
     XymonClientConfig $cfglines
 }
 
-$lastcollectfile = join-path $script:XymonSettings.clientlogpath 'xymon-lastcollect.txt'
+$script:lastcollectfile = join-path $script:XymonSettings.clientlogpath 'xymon-lastcollect.txt'
 $running = $true
 $script:collectionnumber = (0 -as [long])
 $loopcount = ($script:slowscanrate - 1)
@@ -4202,7 +4265,7 @@ AddHelperTypes
 
 while ($running -eq $true) {
     # log file setup/maintenance
-    RotateLog $lastcollectfile
+    RotateLog $script:lastcollectfile
     RotateLog $script:XymonSettings.clientlogfile
     Set-Content -Path $script:XymonSettings.clientlogfile `
         -Value "$clientname - $XymonClientVersion"
@@ -4265,7 +4328,7 @@ while ($running -eq $true) {
     WriteLog "Main and optional tests finished."
     
     WriteLog "Sending to server"
-    Set-Content -path $lastcollectfile -value $clout
+    Set-Content -path $script:lastcollectfile -value $clout
         
     $newconfig = XymonSend $clout $script:XymonSettings.serversList
 
