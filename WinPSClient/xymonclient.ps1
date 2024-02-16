@@ -4259,7 +4259,12 @@ if (Test-Path -PathType Leaf $script:XymonSettings.clientconfigfile)
 $script:lastcollectfile = join-path $script:XymonSettings.clientlogpath 'xymon-lastcollect.txt'
 $running = $true
 $script:collectionnumber = (0 -as [long])
-$loopcount = ($script:slowscanrate - 1)
+
+if ( $script:slowscanrate -gt 0 ) {
+    $loopcount = Get-Random -Maximum ($script:slowscanrate)
+} else {
+    $loopcount = 0
+}
 
 AddHelperTypes
 
