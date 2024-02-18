@@ -1,0 +1,9 @@
+user=client
+password=client
+
+header=Content-type: application/octet-stream
+header=Mime-version: 1.0
+connect-timeout=10
+tries=1
+auth_no_challenge=off
+check_certificate=off

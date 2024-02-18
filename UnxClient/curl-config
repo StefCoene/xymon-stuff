@@ -1,0 +1,7 @@
+user = client:client
+
+Header = "Content-type: application/octet-stream"
+Header = "Mime-version: 1.0"
+connect-timeout = 10 
+silent
+insecure
